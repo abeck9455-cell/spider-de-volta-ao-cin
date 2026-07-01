@@ -34,11 +34,11 @@ CIRCUIT
 
 MEMBERS:
 
-Alvaro Claudio Bezerra da Silva
-Arthur Martins da Silva
-Leticia elany rodrigues
-Caio Riquelmy Santos do Nascimento
-Gabriel Vitória Vasco Alves
+- Alvaro Claudio Bezerra da Silva
+- Arthur Martins da Silva
+- Leticia elany rodrigues
+- Caio Riquelmy Santos do Nascimento
+- Gabriela Vitória Vasco Alves
 
 
 <img width="1200" height="1600" alt="WhatsApp Image 2026-06-30 at 20 44 58 (1)" src="https://github.com/user-attachments/assets/856c1dd1-430b-4497-b7a0-1a0d1f7f3f1b" />
