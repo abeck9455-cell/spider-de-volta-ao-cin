@@ -17,6 +17,7 @@ HARDWARE/ELETRONICS
 - 3D printed spider robot 
 
 
+
 SOFTWARE
 
 - Arduino IDE
@@ -24,11 +25,18 @@ SOFTWARE
   - Servo.h
 
 
+
 CIRCUIT
 
 - 2,3,4,5 consections represent the pivot servos
 - 6,7,8,9 connections represent the lift servos
 - 10,11,12,13 connections represent the paws
+
+
+
+3D PRINTED MODELS
+
+- https://onedrive.live.com/?id=CD05BF6E6E1D1C15%214574&cid=CD05BF6E6E1D1C15&redeem=aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBaFVjSFc1dXZ3WE5vMTQ1TWNyWkhra3VfTWNxP2U9ZEsxaVBD
 
 
 
