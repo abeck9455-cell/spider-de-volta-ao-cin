@@ -1,0 +1,246 @@
+#include <Servo.h>
+
+/* -----------------------------------------------------------------------------
+   MAPEAMENTO
+   servo[pata][0] = pivot    | pata 0=FL, 1=FR, 2=BL, 3=BR
+   servo[pata][1] = elevação |
+   servo[pata][2] = pata     |
+   Pivots:    2, 3, 4, 5
+   Elevações: 6, 7, 8, 9
+   Patas:    10,11,12,13
+----------------------------------------------------------------------------- */
+Servo servo[4][3];
+
+const int servo_pin[4][3] = {
+  {2,  6,  10},   // FL
+  {3,  7,  11},   // FR
+  {4,  8,  12},   // BL
+  {5,  9,  13}    // BR
+};
+
+/* -----------------------------------------------------------------------------
+   INVERSÕES (+1 normal / -1 montado ao contrário)
+----------------------------------------------------------------------------- */
+const int inv_pivot[4] = {-1,  1, -1,  1};   // FL invertido, BL invertido
+const int inv_elev[4]  = { 1, -1,  1, -1};   // FL e BL sobem com +delta
+const int inv_pata[4]  = {-1,  1, -1,  1};   // FR e BR sobem com +delta
+
+/* -----------------------------------------------------------------------------
+   POSIÇÕES — tudo em delta de graus a partir do centro (90°)
+   pos_now e pos_expect guardam deltas, não ângulos absolutos
+----------------------------------------------------------------------------- */
+volatile float pos_now[4][3];
+volatile float pos_expect[4][3];
+float          temp_speed[4][3];
+float          move_speed;
+
+const float KEEP = 255;
+
+/* Amplitudes de movimento */
+const float D_PIVOT = 28.0;
+const float D_ELEV  = 18.0;
+const float D_PATA  = 16.0;
+
+/* Velocidades em graus por ciclo de 20ms (millis) */
+const float VEL_RAPIDO = 3.0;   // levanta/avança a pata
+const float VEL_LENTO  = 1.5;   // abaixa a pata
+const float VEL_CORPO  = 1.0;   // recuo suave do corpo
+
+/* Intervalo do "timer" em ms */
+const unsigned long TICK_MS = 20;
+unsigned long ultimo_tick = 0;
+
+/* =============================================================================
+   SETUP
+============================================================================= */
+void setup() {
+  Serial.begin(115200);
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 3; j++) {
+      pos_now[i][j]    = 0;
+      pos_expect[i][j] = 0;
+      temp_speed[i][j] = 0;
+    }
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 3; j++) {
+      servo[i][j].attach(servo_pin[i][j]);
+      delay(80);
+    }
+
+  Serial.println("Pronto!");
+  posicao_inicial();
+  delay(1500);
+}
+
+/* =============================================================================
+   LOOP
+============================================================================= */
+void loop() {
+  posicao_inicial();
+  delay(2000);
+
+  for (int i = 0; i < 6; i++)
+    passo_frente();
+
+  delay(2000);
+}
+
+/* =============================================================================
+   SERVO SERVICE — substitui o FlexiTimer2
+   Deve ser chamado no começo de toda função bloqueante
+   e dentro dos wait_reach
+============================================================================= */
+void servo_service() {
+  unsigned long agora = millis();
+  if (agora - ultimo_tick < TICK_MS) return;
+  ultimo_tick = agora;
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 3; j++) {
+      float diff = pos_expect[i][j] - pos_now[i][j];
+      if (abs(diff) >= abs(temp_speed[i][j]))
+        pos_now[i][j] += temp_speed[i][j];
+      else
+        pos_now[i][j] = pos_expect[i][j];
+    }
+
+    int ang_p = constrain((int)(90 + pos_now[i][0] * inv_pivot[i]), 0, 180);
+    int ang_e = constrain((int)(90 + pos_now[i][1] * inv_elev[i]),  0, 180);
+    int ang_t = constrain((int)(90 + pos_now[i][2] * inv_pata[i]),  0, 180);
+
+    servo[i][0].write(ang_p);
+    servo[i][1].write(ang_e);
+    servo[i][2].write(ang_t);
+  }
+}
+
+/* =============================================================================
+   SET_SITE — define posição esperada (não bloqueante)
+============================================================================= */
+void set_site(int leg, float p, float e, float t) {
+  float lp = (p != KEEP) ? p - pos_now[leg][0] : 0;
+  float le = (e != KEEP) ? e - pos_now[leg][1] : 0;
+  float lt = (t != KEEP) ? t - pos_now[leg][2] : 0;
+
+  float dist = sqrt(lp*lp + le*le + lt*lt);
+  if (dist < 0.001) dist = 1;
+
+  temp_speed[leg][0] = (p != KEEP) ? lp / dist * move_speed : 0;
+  temp_speed[leg][1] = (e != KEEP) ? le / dist * move_speed : 0;
+  temp_speed[leg][2] = (t != KEEP) ? lt / dist * move_speed : 0;
+
+  if (p != KEEP) pos_expect[leg][0] = p;
+  if (e != KEEP) pos_expect[leg][1] = e;
+  if (t != KEEP) pos_expect[leg][2] = t;
+}
+
+/* =============================================================================
+   WAIT — bloqueantes, mas chamam servo_service enquanto esperam
+============================================================================= */
+bool pata_chegou(int leg) {
+  return abs(pos_now[leg][0] - pos_expect[leg][0]) < 0.5 &&
+         abs(pos_now[leg][1] - pos_expect[leg][1]) < 0.5 &&
+         abs(pos_now[leg][2] - pos_expect[leg][2]) < 0.5;
+}
+
+void wait_reach(int leg) {
+  while (!pata_chegou(leg)) servo_service();
+}
+
+void wait_all_reach() {
+  bool todas = false;
+  while (!todas) {
+    servo_service();
+    todas = true;
+    for (int i = 0; i < 4; i++)
+      if (!pata_chegou(i)) { todas = false; break; }
+  }
+}
+
+/* =============================================================================
+   POSIÇÃO INICIAL
+============================================================================= */
+void posicao_inicial() {
+  move_speed = VEL_LENTO;
+  for (int i = 0; i < 4; i++)
+    set_site(i, 0, 0, 0);
+  wait_all_reach();
+}
+
+/* =============================================================================
+   LEVANTAR / ABAIXAR UMA PATA
+   Sequência: ponta sobe → meio sobe / meio desce → ponta desce
+============================================================================= */
+void levantar_pata(int leg) {
+  move_speed = VEL_LENTO;
+  set_site(leg, KEEP, KEEP, D_PATA);
+  wait_reach(leg);
+  set_site(leg, KEEP, D_ELEV, KEEP);
+  wait_reach(leg);
+}
+
+void abaixar_pata(int leg) {
+  move_speed = VEL_LENTO;
+  set_site(leg, KEEP, 0, KEEP);
+  wait_reach(leg);
+  set_site(leg, KEEP, KEEP, 0);
+  wait_reach(leg);
+}
+
+/* =============================================================================
+   PASSO FRENTE
+   Ciclo A: BL avança → FL avança → recuo parcial de todas
+   Ciclo B: BR avança → FR avança → recuo parcial de todas
+============================================================================= */
+void passo_frente() {
+
+  // === CICLO A: lado esquerdo ===
+
+  // BL (trás-esquerda) sobe e avança
+  levantar_pata(2);
+  move_speed = VEL_RAPIDO;
+  set_site(2, D_PIVOT, KEEP, KEEP);
+  wait_reach(2);
+  abaixar_pata(2);
+
+  // FL (frente-esquerda) sobe e avança
+  levantar_pata(0);
+  move_speed = VEL_RAPIDO;
+  set_site(0, D_PIVOT, KEEP, KEEP);
+  wait_reach(0);
+  abaixar_pata(0);
+
+  // Recuo parcial — todas no chão, corpo desliza pra frente
+  move_speed = VEL_CORPO;
+  set_site(0, 0, KEEP, KEEP);
+  set_site(1, KEEP, KEEP, KEEP);
+  set_site(2, 0, KEEP, KEEP);
+  set_site(3, KEEP, KEEP, KEEP);
+  wait_all_reach();
+
+  // === CICLO B: lado direito ===
+
+  // BR (trás-direita) sobe e avança
+  levantar_pata(3);
+  move_speed = VEL_RAPIDO;
+  set_site(3, D_PIVOT, KEEP, KEEP);
+  wait_reach(3);
+  abaixar_pata(3);
+
+  // FR (frente-direita) sobe e avança
+  levantar_pata(1);
+  move_speed = VEL_RAPIDO;
+  set_site(1, D_PIVOT, KEEP, KEEP);
+  wait_reach(1);
+  abaixar_pata(1);
+
+  // Recuo parcial — todas no chão, corpo desliza pra frente
+  move_speed = VEL_CORPO;
+  set_site(0, KEEP, KEEP, KEEP);
+  set_site(1, 0, KEEP, KEEP);
+  set_site(2, KEEP, KEEP, KEEP);
+  set_site(3, 0, KEEP, KEEP);
+  wait_all_reach();
+}
