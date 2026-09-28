@@ -56,6 +56,7 @@ unsigned long ultimo_tick = 0;
 void setup() {
   Serial.begin(115200);
 
+//Criando a matriz que vai servir para a movimentação
   for (int i = 0; i < 4; i++)
     for (int j = 0; j < 3; j++) {
       pos_now[i][j]    = 0;
@@ -180,7 +181,6 @@ void levantar_pata(int leg) {
   set_site(leg, KEEP, D_ELEV, KEEP);
   wait_reach(leg);
 }
-
 void abaixar_pata(int leg) {
   move_speed = VEL_LENTO;
   set_site(leg, KEEP, 0, KEEP);
@@ -191,8 +191,8 @@ void abaixar_pata(int leg) {
 
 /* =============================================================================
    PASSO FRENTE
-   Ciclo A: BL avança → FL avança → recuo parcial de todas
-   Ciclo B: BR avança → FR avança → recuo parcial de todas
+   Ciclo A: BL avança → FL avança → recuo parcial de todas as patas
+   Ciclo B: BR avança → FR avança → recuo parcial de todas as patas
 ============================================================================= */
 void passo_frente() {
 
