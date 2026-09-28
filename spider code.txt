@@ -27,7 +27,7 @@ const int inv_pata[4]  = {-1,  1, -1,  1};   // FR e BR sobem com +delta
 
 /* -----------------------------------------------------------------------------
    POSIÇÕES — tudo em delta de graus a partir do centro (90°)
-   pos_now e pos_expect guardam deltas, não ângulos absolutos
+   pos_now e pos_expect guardam deltas, os ângulos não são absolutos
 ----------------------------------------------------------------------------- */
 volatile float pos_now[4][3];
 volatile float pos_expect[4][3];
